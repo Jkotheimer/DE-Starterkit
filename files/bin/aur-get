@@ -1,0 +1,31 @@
+#!/bin/bash
+
+[ -z $1 ] && echo "No package name specified" && exit 1
+
+
+# If the package does not exist in the aur, exit with an error
+[ "$(curl -I -s "https://aur.archlinux.org/packages/${1}" | head -n 1 | cut -d$' ' -f2)" = 404 ] && {
+	echo "Could not locate package: ${1}"
+	exit -1
+}
+
+cd $HOME/Downloads
+
+# If the directory already exists, prompt for reinstallation
+[ -d "${1}-aur" ] && {
+	read -n 1 -p "$HOME/Downloads/${1}-aur already exists. Reinstall? [Y/n] " REINSTALL
+	echo ""  
+	if [[ -z $REINSTALL || "${REINSTALL^^}" = "Y" ]]; then
+		sudo rm -rf "${1}-aur"
+	else
+		exit 0
+	fi
+}
+
+# Clone the repository, move into it, and install
+git clone "https://aur.archlinux.org/${1}.git" "${1}-aur"
+cd "${1}-aur"
+makepkg -si
+
+# If the installation failed, remove the cloned directory
+[ $? -ne 0 ] && echo "Failed to install package. Make sure base-devel is installed on your system." && sudo rm -rf "${1}-aur"
