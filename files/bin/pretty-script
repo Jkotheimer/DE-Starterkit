@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# -----------------------------------------------------------------------------
+# PRETTY PRINTERS/ COMMAND HANDLER
+# -----------------------------------------------------------------------------
+# Just some colorful output handlers to satisfy those who enjoy clean script responses
+red=$'\033[0;31m'
+yellow=$'\033[0;33m'
+green=$'\033[0;32m'
+blue=$'\033[0;34m'
+nc=$'\033[0m'
+
+# Print something in color
+# $1: String to print
+# $2: Color to print with
+echoc() {
+	printf "%s%s%s\n" "$2" "$1" "$nc"
+}
+# Print the description of a command before its execution
+_print() {
+	[ "$VERBOSE" -eq 1 ] && printf "%s...\n" "$@" || printf '[ .... ] %s' "$@"
+}
+_ok() {
+	printf "\r[%s DONE %s]\n" "$green" "$nc"
+}
+_warn() {
+	printf "\r[%s WARN %s] %s\n" "$yellow" "$nc" "$1"
+}
+# $1: Error message
+# $2: (optional) '-' to print the error message inline with the [ FAIL ] flag
+_err() {
+	printf "\r[%s FAIL %s] " "$red" "$nc"
+	[ -z "$2" ] && printf "\n"
+	printf "%s\n" "$1"
+	exit 1
+}
+# $1: Command to execute and handle
+# $2: (optional) log file to save command output to
+# $3: (optional) '-' to put an '&' after command to make it a background process
+_handle() {
+	# If a log file was specified, set it to the output variable
+	LOG=logs/temp.log
+	[ -n "$2" ] && LOG=logs/$2 
+	STAT=0
+	# If the daemon flag is set, send the command to the daemons
+	if [ -n "$3" ]; then
+		if [ "$VERBOSE" -eq 1 ]; then
+			$1 | tee "$LOG" &
+			STAT=${PIPESTATUS[0]}
+
+			# If the daemon flag was a '/' under verbose mode, wait for the command to resolve
+			# This is typically done if the command is the last command in a series, and you want to view it's output
+			if [ "$3" = '/' ]; then
+				wait
+			else
+				sleep 3
+			fi
+		else
+			$1 &>"$LOG" &
+			STAT=$?
+			sleep 3
+		fi
+	else
+		if [ "$VERBOSE" -eq 1 ]; then
+			$1 | tee "$LOG"
+			STAT=${PIPESTATUS[0]}
+		else
+			$1 &>"$LOG"
+			STAT=$?
+		fi
+	fi
+
+	# If the status was successful, print [ DONE ], else exit with the status code of the command
+	if [ "$STAT" -eq 0 ]; then
+		_ok
+		[[ "$VERBOSE" -ne 1 && -n "$2" ]] && echoc "Log: $LOG" "$blue"
+	else 
+		if [ "$VERBOSE" -eq 1 ]; then
+			_err "Status: $STAT" -
+		else
+			_err "$(tail -n 15 "$LOG")"
+		fi
+	fi
+	return "$STAT"
+}
