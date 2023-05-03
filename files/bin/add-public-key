@@ -1,0 +1,81 @@
+#!/bin/sh
+# 
+# @date 1/26/2021
+# @author Jack Kotheimer
+#
+# A simple ssh key manager
+#
+# Interface for adding a new ssh public key
+# Wipes all keys in ~/.ssh/authorized_keys2 once a month with a crontab passing "
+# !!MAKE SURE YOUR MASTER KEY IS STORED SAFELY IN ~/.ssh/authorized_keys!!
+
+source pretty-script
+
+SSH_AUTH_FILE=~/.ssh/authorized_keys2
+
+# The crontab will take this same md5sum and pass it as a parameter to this script as an indicator to flush all extra authorized keys
+# CRONTAB ENTRY: 0 0 1 * * ssh_key_manager "$(md5sum /app/* 2>&1 | md5sum - | sed 's/ .*//g')"
+if [[ "$1" == "$(md5sum /app/* 2>&1 | md5sum - | sed 's/ .*//g')" ]] ; then
+    echo '' > $SSH_AUTH_FILE
+    exit 0
+fi
+
+display_help() {
+    cat << EOF
+
+Welcome to my makeshift ssh key adding firewall!
+Here's how to grant someone access to this server:
+
+add_public_key <${bright_yellow}Your key's name${reset}> <${bright_yellow}Your passcode${reset}> <${bright_yellow}Your public key${reset}> \\
+               <${bright_yellow}New key's name${reset}>  <${bright_yellow}New passcode${reset}>  <${bright_yellow}New user's public key${reset}>
+
+If you do not remember your passcode, please contact your system admin
+
+EOF
+    exit 1
+}
+
+[ $# -ne 6 ] && display_help
+
+# Authorizer credentials
+AUTH_KEY_NAME="$1"
+AUTH_KEY_PASS="$2"
+AUTH_PUB_KEY="$3"
+
+# New authorized user's credentials
+NEW_KEY_NAME="$4"
+NEW_KEY_PASS="$5"
+NEW_PUB_KEY="$6"
+
+printf "Verifying Auth user... "
+
+# Attempt to decrypt the auth user's cred file. If it works and the contents are valid, encrypt the new user's cred file, and add their public key to /home/ec2-user/.ssh/authorized_keys2
+AUTH_LOCK_FILE="$(echo "$AUTH_KEY_NAME" | md5sum - | sed 's/ .*//g').lock"
+DECRYPTED_CONTENTS=$(openssl aes-256-cbc -pbkdf2 -d -k "$AUTH_KEY_PASS" -in /etc/ssh/locks/$AUTH_LOCK_FILE -md md5)
+if [[ "$DECRYPTED_CONTENTS"  == "$AUTH_KEY_NAME-$AUTH_PUB_KEY" ]]; then
+
+    echo "done"
+    printf "Generating new lock for $NEW_KEY_NAME... "
+
+    # Contents of a cred file: "<key name>-<key passcode>-<public key>"
+    # Store this in a temp file, then encrypt with the passcode for future authorization
+    NEW_LOCK_FILE="$(echo "$NEW_KEY_NAME" | md5sum - | sed 's/ .*//g').lock"
+    [ $? -ne 0 ] && display_help
+    echo "$NEW_KEY_NAME-$NEW_PUB_KEY" > temp.txt
+    openssl enc -aes-256-cbc -pbkdf2 -k "$NEW_KEY_PASS" -in temp.txt -out /etc/ssh/locks/$NEW_LOCK_FILE -md md5
+    [ $? -ne 0 ] && display_help
+    rm -f temp.txt
+
+    echo "done"
+    printf "Adding $NEW_KEY_NAME to authorized_keys2... "
+
+    # Add the public key to the authorized_keys file
+    echo "# $NEW_KEY_NAME" >> $SSH_AUTH_FILE
+    echo "$NEW_PUB_KEY" >> $SSH_AUTH_FILE
+    [ $? -ne 0 ] && display_help
+
+    echo "done"
+else
+    display_help
+fi
+                
