@@ -19,10 +19,9 @@ filetype plugin indent on
 syntax on
 
 " Format settings
-set autoindent
-set smartindent
-set scrolloff=5
-set ts=4
+set tabstop=4
+set shiftwidth=4
+set expandtab
 
 set wildmenu
 set wildmode=longest:full,full
