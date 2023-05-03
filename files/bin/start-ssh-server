@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+source pretty-script
+
+if ! command -v openssl &> /dev/null; then
+	_error "OpenSSL could not be found. Please install OpenSSL and try again."
+fi
+
+HOST_KEY_PATH=/etc/ssh/ssh_host_rsa_key
+
+if [ ! -f $HOST_KEY_PATH ]; then
+	_warn "Could not find host key. Generating a new one"
+	sudo ssh-keygen -t rsa -b 4096 -f $HOST_KEY_PATH -N ""
+fi
+
+SSH_PORT=$((16#$(openssl rand -hex 2)))
+
+_start "Starting SSH server on port $SSH_PORT"
+
+cat << EOF > ./sshd_config
+Banner /etc/issue
+
+AllowUsers $USER
+Port $SSH_PORT
+HostKey $HOST_KEY_PATH
+
+PermitRootLogin no
+PasswordAuthentication no
+AuthenticationMethods publickey
+EOF
+
+sudo mv /etc/ssh/sshd_config /etc/ssh/sshd_config.old
+sudo mv ./sshd_config /etc/ssh/sshd_config
+
+sudo systemctl enable sshd > /dev/null
+if sudo systemctl status sshd > /dev/null; then
+	sudo systemctl restart sshd > /dev/null
+else
+	sudo systemctl start sshd > /dev/null
+fi
+STATUS=$?
+
+_done
+
+IP_ADDRESS=$(curl -s ifconfig.me)
+
+if [ $STATUS -eq 0 ]; then
+	echo "SSH Server started on port $SSH_PORT"
+	echo "Connect to this server with the following command:"
+	_echoc "ssh -TND $SSH_PORT $USER@$IP_ADDRESS" $yellow
+	echo "or, if you are connecting locally, run this command:"
+	_echoc "ssh -TND $SSH_PORT $USER@$HOSTNAME" $yellow
+	exit 0
+else
+	echo "Failed to start the SSH server. See journalctl -xe for more info."
+	exit 1
+fi
