@@ -23,12 +23,12 @@ mkdir -p logs/
 # DEFAULT VARIABLES & ENABLERS
 VERBOSE=0
 _verbose() {
-	echoc 'Verbose output enabled' "$yellow"
+	_echoc 'Verbose output enabled' "$yellow"
 	VERBOSE=1
 }
 WSL=0 # Windows Subsystem for Linux has a few different setup conditions
 [ -d /mnt/c/Program\ Files ] && {
-	echoc 'WSL detected' "$yellow"
+	_echoc 'WSL detected' "$yellow"
 	WSL=1
 	alias docker=docker.exe
 }
@@ -38,10 +38,10 @@ _help() {
 	FIG=0
 	command -v figlet &>/dev/null && FIG=1 || echo Install figlet for bubble letters on your app name!
 	
-	echoc '-------------------------------------------------------------------' "$blue"
+	_echoc '-------------------------------------------------------------------' "$blue"
 	printf '%s' "$blue"
 	[ "$FIG" -eq 1 ] && figlet "$APP" || echo "$APP"
-	echoc '-------------------------------------------------------------------' "$blue"
+	_echoc '-------------------------------------------------------------------' "$blue"
 	echo 
 	echo 'This script contains several functions to automate the software development process'
 	echo 'Only one function may be executed at a time'
@@ -50,29 +50,29 @@ _help() {
 	echo 'case statement at the bottom of this file. Document the function it serves in this help menu, and'
 	echo 'create a pull request :)'
 	echo 
-	echoc '-----------------------------------------------' "$blue"
-	echoc '|           HOW TO USE THIS SCRIPT            |' "$blue"
-	echoc '-----------------------------------------------' "$blue"
-	echoc './run.sh <primary> <secondary>' "$yellow"
+	_echoc '-----------------------------------------------' "$blue"
+	_echoc '|           HOW TO USE THIS SCRIPT            |' "$blue"
+	_echoc '-----------------------------------------------' "$blue"
+	_echoc './run.sh <primary> <secondary>' "$yellow"
 	echo  '   <primary>   : (required) is any one of the below commands (a secondary command may be used as a primary)'
 	echo  '   <secondary> : (optional) is any combination of secondary commands'
 	echo 
-	echoc 'PRIMARY COMMANDS' "$blue"
-	echoc '-------------------------------------------------------------------' "$blue"
+	_echoc 'PRIMARY COMMANDS' "$blue"
+	_echoc '-------------------------------------------------------------------' "$blue"
 	echo 'Only one of these may be used at a time. It must be the first argument'
-	echoc '-------------------------------------------------------------------' "$blue"
+	_echoc '-------------------------------------------------------------------' "$blue"
 	echo '--deploy      [-d]: Deploy the server'
 	echo '    Dependencies from config/app.conf'
 	echo '        - ENV: Environment to deploy to (dev, staging, production). See --env'
 	echo '        - TAG: Docker image tag to deploy with. See --tag'
 	echo '--boot        [-b]: Boot up the container without starting the server. (good for server debugging)'
 	echo 
-	echoc 'SECONDARY COMMANDS' "$blue"
-	echoc '-------------------------------------------------------------------' "$blue"
+	_echoc 'SECONDARY COMMANDS' "$blue"
+	_echoc '-------------------------------------------------------------------' "$blue"
 	echo 'Any number of these commands can be used in one call of this script in any order'
 	echo 'xxx-primary: When a secondary command is used as an \<option\>, it either resolves before \(pre\) or after \(post\) the primary command'
-	echoc '-------------------------------------------------------------------' "$blue"
-	echoc 'Pre-primary -------------------------------------------------------' "$yellow"
+	_echoc '-------------------------------------------------------------------' "$blue"
+	_echoc 'Pre-primary -------------------------------------------------------' "$yellow"
 	echo '--verbose     [-v]: Display verbose output on the primary function'
 	echo '--kill        [-k]: Kill the docker container'
 	echo '--pull        [-p]: Pull an image from Docker Hub'
@@ -85,14 +85,14 @@ _help() {
 	echo '            "git" to use your git branch name as a tag OR'
 	echo '            "-" to copy your current tag onto the "latest" tag'
 	echo 
-	echoc 'Post-primary ------------------------------------------------------' "$yellow"
+	_echoc 'Post-primary ------------------------------------------------------' "$yellow"
 	echo '--dockershell [-l]: Enter the development docker container command line'
 	echo '--db-connect  [-c]: Connect to a database'
 	echo '--clean       [-n]: Clean all dangling docker images'
 	echo '--push        [-u]: Push a recently built image to Docker Hub'
 	echo '--help        [-h]: Show this help menu'
 	echo 
-	echoc '*If no arguments are supplied, this help menu is displayed' "$yellow"
+	_echoc '*If no arguments are supplied, this help menu is displayed' "$yellow"
 	echo 
 }
 
@@ -110,7 +110,7 @@ req_check() {
 	for cmd in "$@"; do
 		command -v "$cmd" &>/dev/null || err+=("$cmd")
 	done
-	[ ${#err[@]} -gt 0 ] && _err "You must install the following package(s) in order to deploy this project: ${err[*]}" -
+	[ ${#err[@]} -gt 0 ] && _error "You must install the following package(s) in order to deploy this project: ${err[*]}" -
 
 	[ ! -f .env ] && gen_dotenv
 	if [ ! -f config/app.conf ]; then
@@ -120,7 +120,7 @@ req_check() {
 }
 # These requirements are remote deployment specific. I added handlers for them just for ease of use
 remote_req_check() {
-	[ -f config/staging.secret ] || _err "Required file not found: config/staging.secret" -
+	[ -f config/staging.secret ] || _error "Required file not found: config/staging.secret" -
 	command -v eb &>/dev/null || {
 		_warn 'You must install AWS eb cli before running any remote deployment'
 		read -r -n 1 -p 'Would you like to install now? [Y/n]: ' choice
@@ -215,29 +215,29 @@ gen_docker_conf() {
 start_docker() {
 	# If you don't have docker, we try to auto install it
 	if ! command -v docker &>/dev/null; then
-		[ "$WSL" -eq 1 ] && _err 'You must have Docker for Windows installed as docker.exe'
-		_print 'Installing docker'
+		[ "$WSL" -eq 1 ] && _error 'You must have Docker for Windows installed as docker.exe'
+		_start 'Installing docker'
 		_handle 'curl -sSL https://get.docker.com/ | sh' docker-install.log
 	fi
 
 	# If we are working in WSL, make a symlink between Windows docker and the subsystem's docker
 	if [[ "$WSL" -eq 1 && ! $(command -v docker.exe) ]]; then
 		elevate_privileges
-		_print 'Linking Windows Docker with WSL Docker'
+		_start 'Linking Windows Docker with WSL Docker'
 		_handle 'sudo ln -sf /mnt/c/Program\ Files/Docker/Docker/resources/docker.exe /usr/bin/'
 	fi
 	
 	# If the user isn't already in the docker group, add them to it
 	if ! grep -E "docker.*$USER" /etc/group &>/dev/null; then
 		elevate_privileges
-		_print "Adding $USER to the docker group"
+		_start "Adding $USER to the docker group"
 		_handle "sudo usermod -aG docker $USER"
 	fi
 
 	# If the docker service is not running (if the status funtion failed), start it
 	if [[ $WSL -ne 1 && $(! pgrep docker &>/dev/null) ]]; then
 		elevate_privileges
-		_print 'Starting Docker service'
+		_start 'Starting Docker service'
 		_handle 'sudo dockerd' docker-service.log -
 		_warn 'dockerd was used to start the docker service. This is known to be buggy. It is recommended that you start the docker daemon manually.'
 	fi
@@ -246,33 +246,33 @@ start_docker() {
 # Macro to execute a command inside the docker container
 # $@: Any valid bash command
 drun() {
-	docker exec -it "$APP" "$@" || _err
+	docker exec -it "$APP" "$@" || _error
 }
 kill_docker_container() {
-	_print 'Killing Docker container'
+	_start 'Killing Docker container'
 	docker kill "$APP" &>/dev/null
-	_ok
+	_done
 }
 remove_docker_container() {
 	kill_docker_container
-	_print 'Removing Docker container named ezclinic'
+	_start 'Removing Docker container named ezclinic'
 	docker rm "$APP" &>/dev/null
-	_ok
+	_done
 }
 remove_docker_image() {
 	remove_docker_container
-	_print "Removing Docker image named $ORG/${APP}_$ENV:$TAG"
+	_start "Removing Docker image named $ORG/${APP}_$ENV:$TAG"
 	docker image rm "$(docker image ls -aq "$ORG/${APP}_$ENV:$TAG")" &>/dev/null
-	_ok
+	_done
 }
 docker_login() {
-	_print 'Logging you into Docker'
+	_start 'Logging you into Docker'
 	_handle 'docker login'
 }
 pull_docker_image() {
 	docker_login
 
-	_print "Pulling from docker.io/$ORG/${APP}_$ENV:$TAG"
+	_start "Pulling from docker.io/$ORG/${APP}_$ENV:$TAG"
 	_handle "docker pull $ORG/${APP}_$ENV:$TAG"
 }
 push_docker_image() {
@@ -285,28 +285,28 @@ push_docker_image() {
 		TAG=latest
 	}
 
-	_print "Pushing new docker image to docker.io/$ORG/${APP}_$ENV:$TAG"
+	_start "Pushing new docker image to docker.io/$ORG/${APP}_$ENV:$TAG"
 	_handle "docker push $ORG/${APP}_$ENV:$TAG"
 }
 create_docker_image() {
-	[ "$VERBOSE" -ne 1 ] && echoc 'Verbose output auto-enabled' "$yellow"
+	[ "$VERBOSE" -ne 1 ] && _echoc 'Verbose output auto-enabled' "$yellow"
 	VERBOSE=1
-	_print "Building Docker image: $ORG/${APP}_$ENV:$TAG (this may take a hot sec)"
+	_start "Building Docker image: $ORG/${APP}_$ENV:$TAG (this may take a hot sec)"
 	_handle "docker build --tag $ORG/${APP}_$ENV:$TAG --target $ENV ." docker-init.log
 }
 create_docker_container() {
 	remove_docker_container
 	gen_docker_conf
-	_print "Creating Docker container named $APP with image: $ORG/${APP}_$ENV:$TAG"
+	_start "Creating Docker container named $APP with image: $ORG/${APP}_$ENV:$TAG"
 	_handle "docker run -d $DOCKER_RUN_PARAMETERS --hostname com-$APP-app --name $APP -it $ORG/${APP}_$ENV:$TAG" docker-run.log
 }
 start_docker_container() {
 	kill_docker_container
-	_print "Starting existing Docker container named $APP"
+	_start "Starting existing Docker container named $APP"
 	_handle "docker container start $APP"
 }
 clean_docker_images() {
-	_print 'Cleaning dangling images'
+	_start 'Cleaning dangling images'
 	_handle "docker image rm -f $(docker image ls -aqf dangling=true)"
 }
 # Docker Container/Image Status
@@ -318,21 +318,21 @@ clean_docker_images() {
 #   4: Image & container exist, container is alive & running properly
 docker_ci_status() {
 	STAT=0
-	echoc "Checking for image named $ORG/${APP}_$ENV:$TAG" "$blue"
+	_echoc "Checking for image named $ORG/${APP}_$ENV:$TAG" "$blue"
 	if docker image ls | grep "$ORG/${APP}_$ENV.*$TAG"; then
 		((STAT++))
 	else
 		return $STAT
 	fi
 
-	echoc "Checking for container named $APP" "$blue"
+	_echoc "Checking for container named $APP" "$blue"
 	if docker ps -a | grep "$APP"; then
 		((STAT++))
 	else
 		return $STAT
 	fi
 
-	echoc "Checking status of container" "$blue"
+	_echoc "Checking status of container" "$blue"
 	if docker ps | grep "$APP"; then
 		((STAT++))
 	else
@@ -378,7 +378,7 @@ _deploy() {
 # REMOTE DEPLOYMENT MECHANISMS
 # -----------------------------------------------------------------------------
 set_remote_env() {
-	_print 'Setting environment variables'
+	_start 'Setting environment variables'
 	# Grab the secret files, use xargs to turn into arguments
 	_handle "eb setenv $(cat config/staging.env config/staging.secret .env | xargs)" eb-setenv-localreport.log
 	# Allow time for AWS to return to the 'ready' state
@@ -392,8 +392,8 @@ deploy_staging_environment() {
 	# If an environment is selected (it has a * in front of it), just use it. If not, prompt fo
 	eb_environment="$(echo "$EB_LIST" | grep '\*' | sed 's/* //g')"
 	[ -z "$eb_environment" ] && {
-		echoc 'Which EB Instance would you like to Use?' "$blue"
-		echoc "$EB_LIST" "$yellow"
+		_echoc 'Which EB Instance would you like to Use?' "$blue"
+		_echoc "$EB_LIST" "$yellow"
 	
 		# Prompt for environment selection until valid selection
 		while true; do
@@ -410,7 +410,7 @@ deploy_staging_environment() {
 	[[ "$args" == */--update/* || "$args" == */-u/* ]] && set_remote_env
 	[[ "$args" == */--migrate/* || "$args" == */-m/* ]] && make_db_migrations
 
-	_print "Deploying application in $eb_environment (This may take a while)"
+	_start "Deploying application in $eb_environment (This may take a while)"
 	_handle 'eb deploy --staged' eb-deploy-localreport.log
 	eb open 
 }
@@ -500,7 +500,7 @@ for cmd in "$@"; do
 	elif [ "$STAT" -eq 1 ]; then
 		echo 'one'
 	elif [ "$STAT" -eq 2 ]; then
-		[ -n "$PRIMARY" ] && _err "Multiple primary command issued: $cmd" -
+		[ -n "$PRIMARY" ] && _error "Multiple primary command issued: $cmd" -
 		PRIMARY=$next
 	elif [ "$STAT" -eq 3 ]; then
 		POST+=( "$next" )
