@@ -1,84 +1,153 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # -----------------------------------------------------------------------------
-# PRETTY PRINTERS/ COMMAND HANDLER
+# PRETTY SCRIPT
 # -----------------------------------------------------------------------------
-# Just some colorful output handlers to satisfy those who enjoy clean script responses
+
+VERBOSE=0
+
+for arg in $@; do
+    if [[ $arg == -v || $arg == --verbose ]]; then
+        VERBOSE=1
+    fi
+done
+
+# Color definitions
+black=$'\033[0;30m'
 red=$'\033[0;31m'
-yellow=$'\033[0;33m'
 green=$'\033[0;32m'
+yellow=$'\033[0;33m'
 blue=$'\033[0;34m'
-nc=$'\033[0m'
+purple=$'\033[0;35m'
+cyan=$'\033[0;36m'
+white=$'\033[0;37m'
+gray=$'\033[0;90m'
+bright_red=$'\033[0;91m'
+bright_green=$'\033[0;92m'
+bright_yellow=$'\033[0;93m'
+bright_blue=$'\033[0;94m'
+bright_purple=$'\033[0;95m'
+bright_cyan=$'\033[0;96m'
+bright_white=$'\033[0;97m'
+bg_black=$'\033[40m'
+bg_red=$'\033[41m'
+bg_green=$'\033[42m'
+bg_yellow=$'\033[43m'
+bg_blue=$'\033[44m'
+bg_purple=$'\033[45m'
+bg_cyan=$'\033[46m'
+bg_white=$'\033[47m'
+bg_gray=$'\033[100m'
+bg_bright_red=$'\033[101m'
+bg_bright_green=$'\033[102m'
+bg_bright_yellow=$'\033[103m'
+bg_bright_blue=$'\033[104m'
+bg_bright_purple=$'\033[105m'
+bg_bright_cyan=$'\033[106m'
+bg_bright_white=$'\033[107m'
+reset=$'\033[0m'
 
 # Print something in color
 # $1: String to print
 # $2: Color to print with
-echoc() {
-	printf "%s%s%s\n" "$2" "$1" "$nc"
+_echoc() {
+    printf "%s%s%s\n" "$2" "$1" "$reset"
 }
+_printfc_center() {
+	COLUMNS=$(tput cols)
+	printf "%*s\n" $(((${#1}+${COLUMNS})/2)) "${2}${1}${reset}"
+}	
 # Print the description of a command before its execution
-_print() {
-	[ "$VERBOSE" -eq 1 ] && printf "%s...\n" "$@" || printf '[ .... ] %s' "$@"
+_start() {
+    [ $VERBOSE -eq 1 ] && printf "%s...\n" "$@" || printf '[ .... ] %s' "$@"
 }
-_ok() {
-	printf "\r[%s DONE %s]\n" "$green" "$nc"
+_done() {
+    printf "\r[%s DONE %s]\n" "$green" "$reset"
 }
 _warn() {
-	printf "\r[%s WARN %s] %s\n" "$yellow" "$nc" "$1"
+    printf "\r[%s WARN %s] %s\n" "$yellow" "$reset" "$1"
 }
 # $1: Error message
 # $2: (optional) '-' to print the error message inline with the [ FAIL ] flag
-_err() {
-	printf "\r[%s FAIL %s] " "$red" "$nc"
-	[ -z "$2" ] && printf "\n"
-	printf "%s\n" "$1"
-	exit 1
+_error() {
+    printf "\r[%s FAIL %s] " "$red" "$reset"
+    [ -z "$2" ] && printf "\n"
+    printf "%s\n" "$1"
+    exit 1
 }
-# $1: Command to execute and handle
-# $2: (optional) log file to save command output to
-# $3: (optional) '-' to put an '&' after command to make it a background process
-_handle() {
-	# If a log file was specified, set it to the output variable
-	LOG=logs/temp.log
-	[ -n "$2" ] && LOG=logs/$2 
-	STAT=0
-	# If the daemon flag is set, send the command to the daemons
-	if [ -n "$3" ]; then
-		if [ "$VERBOSE" -eq 1 ]; then
-			$1 | tee "$LOG" &
-			STAT=${PIPESTATUS[0]}
 
-			# If the daemon flag was a '/' under verbose mode, wait for the command to resolve
-			# This is typically done if the command is the last command in a series, and you want to view it's output
-			if [ "$3" = '/' ]; then
-				wait
-			else
-				sleep 3
-			fi
-		else
-			$1 &>"$LOG" &
-			STAT=$?
-			sleep 3
-		fi
-	else
-		if [ "$VERBOSE" -eq 1 ]; then
-			$1 | tee "$LOG"
-			STAT=${PIPESTATUS[0]}
-		else
-			$1 &>"$LOG"
-			STAT=$?
-		fi
-	fi
+#------------------------
+# Initialization Handling
+#------------------------
 
-	# If the status was successful, print [ DONE ], else exit with the status code of the command
-	if [ "$STAT" -eq 0 ]; then
-		_ok
-		[[ "$VERBOSE" -ne 1 && -n "$2" ]] && echoc "Log: $LOG" "$blue"
-	else 
-		if [ "$VERBOSE" -eq 1 ]; then
-			_err "Status: $STAT" -
-		else
-			_err "$(tail -n 15 "$LOG")"
-		fi
-	fi
-	return "$STAT"
-}
+# If any argument is provided, help text is displayed
+if [ -n "${1}" ]; then
+    printf "pretty-scriptis a framework for developinag "
+    printf "${red}p${orange}r${yellow}e${green}t${blue}t${purple}y "
+    printf "${red}s${orange}h${yellow}e${green}l${blue}l "
+    echo -e "${purple}s${red}c${yellow}r${green}i${blue}p${purple}t${pink}s${bright_white}!"
+
+    echo $reset
+
+    _echoc "COLOR DEFINITIONS" $bright_yellow
+	_echoc "----------------------------------"
+    echo -e "Red                      (${red}sample${reset}): \${red}"
+    echo -e "Green                    (${green}sample${reset}): \${green}"
+    echo -e "Yellow                   (${yellow}sample${reset}): \${yellow}"
+    echo -e "Blue                     (${blue}sample${reset}): \${blue}"
+    echo -e "Purple                   (${purple}sample${reset}): \${purple}"
+    echo -e "Cyan                     (${cyan}sample${reset}): \${cyan}"
+    echo -e "White                    (${white}sample${reset}): \${white}"
+    echo -e "Gray                     (${gray}sample${reset}): \${gray}"
+    echo -e "Bright Red               (${bright_red}sample${reset}): \${bright_red}"
+    echo -e "Bright Green             (${bright_green}sample${reset}): \${bright_green}"
+    echo -e "Bright Yellow            (${bright_yellow}sample${reset}): \${bright_yellow}"
+    echo -e "Bright Blue              (${bright_blue}sample${reset}): \${bright_blue}"
+    echo -e "Bright Purple            (${bright_purple}sample${reset}): \${bright_purple}"
+    echo -e "Bright Cyan              (${bright_cyan}sample${reset}): \${bright_cyan}"
+    echo -e "Bright White             (${bright_white}sample${reset}): \${bright_white}"
+    echo -e "Background Red           (${bg_red}sample${reset}): \${bg_red}"
+    echo -e "Background Green         (${bg_green}sample${reset}): \${bg_green}"
+    echo -e "Background Yellow        (${bg_yellow}sample${reset}): \${bg_yellow}"
+    echo -e "Background Blue          (${bg_blue}sample${reset}): \${bg_blue}"
+    echo -e "Background Purple        (${bg_purple}sample${reset}): \${bg_purple}"
+    echo -e "Background Cyan          (${bg_cyan}sample${reset}): \${bg_cyan}"
+    echo -e "Background White         (${bg_white}sample${reset}): \${bg_white}"
+    echo -e "Background Gray          (${bg_gray}sample${reset}): \${bg_gray}"
+    echo -e "Background Bright Red    (${bg_bright_red}sample${reset}): \${bg_bright_red}"
+    echo -e "Background Bright Green  (${bg_bright_green}sample${reset}): \${bg_bright_green}"
+    echo -e "Background Bright Yellow (${bg_bright_yellow}sample${reset}): \${bg_bright_yellow}"
+    echo -e "Background Bright Blue   (${bg_bright_blue}sample${reset}): \${bg_bright_blue}"
+    echo -e "Background Bright Purple (${bg_bright_purple}sample${reset}): \${bg_bright_purple}"
+    echo -e "Background Bright Cyan   (${bg_bright_cyan}sample${reset}): \${bg_bright_cyan}"
+    echo -e "Background Bright White  (${bg_bright_white}sample${reset}): \${bg_bright_white}"
+    echo -e "Reset                    (${reset}sample) \${reset}"
+    echo
+    _echoc "Scripting Functions" $bright_yellow
+    echo "----------------------------------"
+    echo "_echoc \"message\" \$color"
+    echo "    Print the message in the specified color. This resets the color so you don't have to use \$reset."
+    echo
+    echo "_start \"Description of the process that is about to be executed\""
+    echo "    Print a loading state for a sub-process that the script is about to execute."
+    echo "    Sample Output:"
+    echo "    [ .... ] Spinning up a Docker container"
+    echo
+    echo "_done"
+    echo "    Convert the loading block from _start to a successful done block"
+    echo "    Sample Output:"
+    echo "    [ ${green}DONE${reset} ] Spinning up a Docker container"
+    echo
+    echo "_warn \"Warning message\""
+    echo "    Print a warning message"
+    echo "    Sample Output:"
+    echo "    [ ${yellow}WARN${reset} ] Your Docker version is out of date"
+    echo
+    echo "_error \"Error Message\""
+    echo "    Print an error message"
+    echo "    Sample Output:"
+    echo "    [ ${red}ERROR${reset} ] Failed to deploy Docker container"
+    echo
+    _echoc "Arguments" $bright_yellow
+    echo "----------------------------------"
+    echo "-v --verbose | Enable verbose output of commands"
+fi
