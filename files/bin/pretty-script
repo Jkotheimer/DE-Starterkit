@@ -58,10 +58,11 @@ _printfc_center() {
 }	
 # Print the description of a command before its execution
 _start() {
-    [ $VERBOSE -eq 1 ] && printf "%s...\n" "$@" || printf '[ .... ] %s' "$@"
+    PROCESS_MESSAGE="$@"
+    [ $VERBOSE -eq 1 ] && printf "%s...\n" "$PROCESS_MESSAGE" || printf '[ .... ] %s' "$PROCESS_MESSAGE"
 }
 _done() {
-    printf "\r[%s DONE %s]\n" "$green" "$reset"
+    printf "\r[%s DONE %s] ${PROCESS_MESSAGE}\n" "$green" "$reset"
 }
 _warn() {
     printf "\r[%s WARN %s] %s\n" "$yellow" "$reset" "$1"
